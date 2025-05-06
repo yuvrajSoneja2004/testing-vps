@@ -50,7 +50,7 @@ debug.log
 
 
 # HLS files
-temp
-tempHLS
-tempThumbnails
-uploads
+# temp
+# tempHLS
+# tempThumbnails
+# uploads
