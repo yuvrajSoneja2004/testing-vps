@@ -1,20 +1,15 @@
 import Redis from "ioredis";
 
-export const redisClient = new Redis({
-  host: "singapore-keyvalue.render.com", // Extracted from your Redis URL
-  port: 6379, // Default Redis port
-  username: "default", // Render Redis default username
-  password: "nmmoBclIuLOtiPv3dtpweMyVyqvn3wYP", // Your Redis password
+export const redisClient = new Redis("rediss://red-cv3a1jrtq21c73bhr4cg:nmmoBclIuLOtiPv3dtpweMyVyqvn3wYP@singapore-keyvalue.render.com:6379", {
   tls: {
-    rejectUnauthorized: false, // Necessary for Render Redis
+    rejectUnauthorized: false,
   },
 });
 
-// Handle connection events
 redisClient.on("connect", () => {
   console.log("Connected to Redis");
 });
 
-redisClient.on("error", (error) => {
-  console.error("Redis connection error:", error);
+redisClient.on("error", (err) => {
+  console.error("Redis connection error:", err);
 });
