@@ -11,6 +11,9 @@ import commentRoutes from "./routes/Comment.routes";
 import storyRoutes from "./routes/Story.routes";
 import swaggerUi from "swagger-ui-express";
 import { swaggerDocs } from "./utils/swaggerOptions";
+import { config } from "dotenv";
+
+config()
 
 const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3005;
