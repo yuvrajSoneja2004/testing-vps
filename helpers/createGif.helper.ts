@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import axios from "axios";
 import FormData from "form-data";
-
+import { uploadToAzure } from "./uploadToAzure.helper";
 interface ConvertToGifOptions {
   videoPath: string;
   outputDir: string;
@@ -21,8 +21,6 @@ export const convertToGif = async ({
   width = 320,
   height = 240,
 }: ConvertToGifOptions): Promise<string> => {
-  const IMGBB_API_KEY = "1860dbb564356e69f87167f8d4c2785c"; // Replace with your ImgBB API key
-
   const gifPath = path.join(outputDir, `${Date.now()}-output.gif`);
 
   // Get video duration to set a random start point
@@ -57,26 +55,23 @@ export const convertToGif = async ({
 
         try {
           // Prepare form data for uploading the GIF as binary
-          const formData = new FormData();
-          formData.append("key", IMGBB_API_KEY);
-          formData.append("image", fs.createReadStream(gifPath));
+          // const formData = new FormData();
+          // formData.append("key", IMGBB_API_KEY);
+          // formData.append("image", fs.createReadStream(gifPath));
 
-          // Upload to ImgBB
-          const response = await axios.post(
-            "https://api.imgbb.com/1/upload",
-            formData,
-            {
-              headers: formData.getHeaders(),
-            }
+          // Upload to Azure
+          const response = await uploadToAzure(
+            "gifs",
+            gifPath,
+            Date.now().toString()
           );
 
           // Cleanup local GIF file after uploading
           fs.unlink(gifPath, (err) => {
             if (err) console.error("Error deleting generated GIF:", err);
           });
-          console.log(response.data.data.url);
           // Resolve with the URL of the uploaded GIF
-          resolve(response.data.data.url);
+          resolve(response);
         } catch (error) {
           console.error("Error uploading GIF to ImgBB:", error);
           reject(new Error("Error uploading GIF to ImgBB"));

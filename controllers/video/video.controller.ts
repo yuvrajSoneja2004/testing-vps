@@ -7,8 +7,9 @@ import { copyFile, rm } from "fs/promises";
 import { QUALITIES } from "../../config/ffmpeg.config";
 import { PRISMA_CLIENT } from "../../database/prismaClient";
 import { convertToGif } from "../../helpers/createGif.helper";
-import { uploadToImgBB } from "../../helpers/uploadThumbnail.helper";
+// import { uploadToImgBB } from "../../helpers/uploadThumbnail.helper";
 import fs from "fs/promises";
+import { uploadToAzure } from "../../helpers/uploadToAzure.helper";
 
 export const uploadVideo = async (req: Request, res: Response) => {
   const uniqueId = uuid();
@@ -29,7 +30,9 @@ export const uploadVideo = async (req: Request, res: Response) => {
       return res.status(400).json({ error: "No video file provided" });
     }
 
-    const FULL_FILE_NAME = `${req.body.title}${path.extname(req.file.originalname)}`;
+    const FULL_FILE_NAME = `${req.body.title}${path.extname(
+      req.file.originalname
+    )}`;
 
     // Total tasks: Upload, HLS processing (multiple qualities), GIF, Thumbnail, DB insert
     const totalTasks = 5; // 5 main tasks
@@ -52,14 +55,17 @@ export const uploadVideo = async (req: Request, res: Response) => {
     // Track individual quality progress
     const qualityProgress: { [key: string]: number } = {};
     const totalQualities = Object.keys(QUALITIES).length;
-    
+
     const updateTotalProgress = () => {
       // Normalize progress across all qualities and scale to 50%
       const hlsProgress =
-        (Object.values(qualityProgress).reduce((acc, progress) => acc + progress, 0) /
+        (Object.values(qualityProgress).reduce(
+          (acc, progress) => acc + progress,
+          0
+        ) /
           totalQualities) *
         0.5; // 50% of total task
-    
+
       // Total progress = 30% (upload) + HLS progress (up to 50%)
       const totalProgress = 30 + hlsProgress * 100; // Convert to percentage
       sendProgress("processing", totalProgress);
@@ -68,20 +74,18 @@ export const uploadVideo = async (req: Request, res: Response) => {
     // Process video into multiple qualities (HLS)
     const hlsPromises = Object.keys(QUALITIES).map((quality) => {
       const qualityDir = paths.qualities[quality];
-      return fs
-        .mkdir(qualityDir, { recursive: true })
-        .then(() =>
-          HLSService.createHLSForQuality(
-            paths.inputFilePath,
-            qualityDir,
-            quality as keyof typeof QUALITIES,
-            FULL_FILE_NAME,
-            (progress: number) => {
-              qualityProgress[quality] = progress / 100; // Normalize to 0-1
-              updateTotalProgress();
-            }
-          )
-        );
+      return fs.mkdir(qualityDir, { recursive: true }).then(() =>
+        HLSService.createHLSForQuality(
+          paths.inputFilePath,
+          qualityDir,
+          quality as keyof typeof QUALITIES,
+          FULL_FILE_NAME,
+          (progress: number) => {
+            qualityProgress[quality] = progress / 100; // Normalize to 0-1
+            updateTotalProgress();
+          }
+        )
+      );
     });
 
     await Promise.all(hlsPromises);
@@ -95,10 +99,24 @@ export const uploadVideo = async (req: Request, res: Response) => {
       videoPath: req.file.path,
       outputDir: "uploads",
     });
-
     // Upload thumbnail
-    const thumbnailUrl = await uploadToImgBB(thumbnail);
+    // const thumbnailUrl = await uploadToImgBB(thumbnail);
+    console.log("thumbnail 💀💀💀💀", thumbnail);
 
+    // Convert URL to local file path
+    const fileName = thumbnail.split("/").pop() || "thumbnail.png";
+    const thumbnailPath = path.resolve(
+      __dirname,
+      "..",
+      "..",
+      "tempThumbnails",
+      fileName
+    );
+    const thumbnailUrlAzure = await uploadToAzure(
+      "thumbnails",
+      thumbnailPath,
+      uniqueId
+    );
     // Update progress for GIF/Thumbnail completion
     completedTasks++;
     sendProgress("thumbnail", 90); // 90% when thumbnail is uploaded
@@ -109,7 +127,7 @@ export const uploadVideo = async (req: Request, res: Response) => {
         title,
         type: category,
         description,
-        thumbnailUrl: thumbnailUrl,
+        thumbnailUrl: thumbnailUrlAzure,
         previewGif,
         videoUrl: uniqueId,
         uploadedBy: parseInt(channelId),
