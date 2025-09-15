@@ -1,7 +1,7 @@
 // src/middleware/upload.middleware.ts
 import multer from "multer";
 import path from "path";
-import mkdirp from "mkdirp";
+import {mkdirp} from "mkdirp";
 
 
 // Storage for hls files

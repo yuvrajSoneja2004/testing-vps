@@ -19,7 +19,11 @@ const app: Express = express();
 const port: number = process.env.PORT ? parseInt(process.env.PORT) : 3005;
 
 // Middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: ["http://localhost:5173"],
+  })
+);
 app.use(
   helmet({
     crossOriginResourcePolicy: false,
@@ -49,7 +53,7 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
 // Basic route
 app.get("/", (req: Request, res: Response) => {
-  res.json({ message: "Welcome to Express TypeScript API" });
+  res.json({ message: "Welcome to Jagstream API!" });
 });
 
 // Error handling

@@ -11,36 +11,70 @@ class HLSService {
     outputDir: string,
     quality: QualityKey,
     FULL_FILE_NAME?: string,
-    progressCallback?: (progress: number) => void // Add this
+    progressCallback?: (progress: number) => void
   ): Promise<void> {
     const preset = QUALITIES[quality];
-  
+
+    // Validate input file exists
+    try {
+      await fs.access(inputPath);
+    } catch (error) {
+      throw new Error(`Input file does not exist: ${inputPath}`);
+    }
+
+    // Normalize paths for Windows compatibility
+    const normalizedInputPath = path.resolve(inputPath);
+    const normalizedOutputDir = path.resolve(outputDir);
+
+    console.log(`Processing ${quality} quality:`);
+    console.log(`Input: ${normalizedInputPath}`);
+    console.log(`Output: ${normalizedOutputDir}`);
+    console.log(`Preset:`, preset);
+
     return new Promise<void>((resolve, reject) => {
-      Ffmpeg(inputPath)
+      const command = Ffmpeg(normalizedInputPath)
         .outputOptions([
-          "-profile:v main",
           "-c:v h264",
+          "-preset fast", // Changed from veryfast to fast for better quality
+          "-profile:v main",
+          `-s ${preset.resolution}`, // Set resolution
+          `-b:v ${preset.bitrate}`, // Set video bitrate
+          "-g 60", // Increased keyframe interval for better compatibility
+          "-keyint_min 30", // Reduced minimum keyframe interval
+          "-sc_threshold 40", // Increased scene change threshold
           "-c:a aac",
-          `-vf scale=${preset.resolution}`,
-          `-b:v ${preset.bitrate}`,
-          `-b:a ${preset.audioBitrate}`,
-          "-hls_time 10",
+          `-b:a ${preset.audioBitrate}`, // Use preset audio bitrate
+          "-ac 2",
+          "-ar 44100", // Changed to standard 44.1kHz for better compatibility
+          "-af aresample=44100", // Standard resampling for better compatibility
+          "-fflags +genpts+igndts", // Improved timestamp handling
+          "-avoid_negative_ts disabled", // Disabled timestamp shifting
+          "-hls_time 6", // Increased segment time for better streaming
           "-hls_list_size 0",
+          "-hls_flags independent_segments+delete_segments", // Added segment deletion
           "-hls_segment_filename",
-          `${outputDir}/${quality}_%03d.ts`,
+          path.join(normalizedOutputDir, `${quality}_%03d.ts`),
           "-f hls",
         ])
-        .output(`${outputDir}/playlist.m3u8`)
+        .output(path.join(normalizedOutputDir, "playlist.m3u8"))
+        .on("start", (commandLine) => {
+          console.log(`FFmpeg command: ${commandLine}`);
+        })
         .on("progress", (progress) => {
-          const percent = progress.percent || 0; // Ensure percent is always a number
+          const percent = progress.percent || 0;
+          console.log(`Processing ${quality}: ${percent.toFixed(2)}%`);
           if (progressCallback) {
-            progressCallback(percent); // Call the progress callback
+            progressCallback(percent);
           }
         })
         .on("end", async () => {
+          console.log(`${quality} quality processing completed`);
           if (FULL_FILE_NAME) {
-            const removeMainFile = path.join(outputDir, "..", FULL_FILE_NAME);
-  
+            const removeMainFile = path.join(
+              normalizedOutputDir,
+              "..",
+              FULL_FILE_NAME
+            );
             try {
               await fs.unlink(removeMainFile);
               console.log(`Successfully deleted file: ${removeMainFile}`);
@@ -50,11 +84,25 @@ class HLSService {
           }
           resolve();
         })
-        .on("error", (err: Error) => reject(err))
-        .run();
+        .on("error", (err: Error) => {
+          console.error(`FFmpeg error for ${quality}:`, err.message);
+          reject(
+            new Error(`FFmpeg conversion failed for ${quality}: ${err.message}`)
+          );
+        });
+
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        command.kill("SIGKILL");
+        reject(new Error(`FFmpeg conversion timeout for ${quality}`));
+      }, 300000); // 5 minutes timeout
+
+      command.on("end", () => clearTimeout(timeout));
+      command.on("error", () => clearTimeout(timeout));
+
+      command.run();
     });
   }
-  
 
   static createMasterPlaylist(
     videoId: string,
@@ -103,7 +151,7 @@ class HLSService {
 
       // Create master playlist
       const masterPlaylist = this.createMasterPlaylist(
-        outputDir.split("/").pop() || "video",
+        path.basename(outputDir) || "video",
         qualities
       );
 

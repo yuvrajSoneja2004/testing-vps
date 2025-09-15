@@ -14,7 +14,6 @@ import { getUserLikedVideos } from "../controllers/video/getUserLikedVideos.cont
 const router = express.Router();
 
 // Serve static files from the 'tempHLS' directory
-router.use(cors());
 router.use("/videos", express.static("tempHLS"));
 router.use("/tempThumbnails", express.static("tempThumbnails"));
 
